@@ -38,25 +38,41 @@ router.get('/search', async (req, res) => {
   }
 })
 
-// PUT /api/lessons/:id  -> update lesson fields (e.g., set spaces)
+// PUT /api/lessons/:id  — update any attribute(s) of a lesson (body applied with $set)
 router.put('/lessons/:id', async (req, res) => {
   try {
-    const id = Number(req.params.id)
-    if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid id' })
+    const idRaw = req.params.id
+    const id = Number(idRaw)
+    if (Number.isNaN(id)) return res.status(400).json({ ok: false, error: 'Invalid lesson id' })
 
-    const updates = req.body || {}
-    if (Object.keys(updates).length === 0)
-      return res.status(400).json({ error: 'No updates provided' })
+    const updates = req.body && typeof req.body === 'object' ? req.body : {}
+    if (!Object.keys(updates).length)
+      return res.status(400).json({ ok: false, error: 'No updates provided' })
+
+    // Validate numeric fields if present (spaces, price)
+    if ('spaces' in updates) {
+      const sp = Number(updates.spaces)
+      if (Number.isNaN(sp) || sp < 0)
+        return res.status(400).json({ ok: false, error: 'Invalid spaces value' })
+      updates.spaces = sp
+    }
+    if ('price' in updates) {
+      const p = Number(updates.price)
+      if (Number.isNaN(p) || p < 0)
+        return res.status(400).json({ ok: false, error: 'Invalid price value' })
+      updates.price = p
+    }
 
     const db = await connectDB()
     const result = await db
       .collection('courses')
-      .findOneAndUpdate({ id }, { $set: updates }, { returnDocument: 'after' })
-    if (!result.value) return res.status(404).json({ error: 'Lesson not found' })
+      .findOneAndUpdate({ id: id }, { $set: updates }, { returnDocument: 'after' })
+
+    if (!result.value) return res.status(404).json({ ok: false, error: 'Lesson not found' })
     res.json({ ok: true, lesson: result.value })
   } catch (err) {
-    console.error('PUT /lessons/:id error', err)
-    res.status(500).json({ error: 'Update failed' })
+    console.error('PUT /api/lessons/:id error', err)
+    res.status(500).json({ ok: false, error: 'Failed to update lesson' })
   }
 })
 
