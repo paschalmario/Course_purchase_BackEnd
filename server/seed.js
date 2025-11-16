@@ -1,30 +1,30 @@
 import fs from 'fs'
 import path from 'path'
-import { connectDB } from './db.js'
 import { fileURLToPath } from 'url'
+import { connectDB } from '../db.js'
 import dotenv from 'dotenv'
 dotenv.config()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// candidate locations to find src/info.json
+// Candidate locations for info.json (works whether front-end is in frontend/ or root src/)
 const candidates = [
-  path.resolve(process.cwd(), 'src', 'info.json'), // when run from project root
-  path.resolve(process.cwd(), '..', 'src', 'info.json'), // when run from server/ with cwd = server
-  path.resolve(__dirname, '..', 'src', 'info.json'), // server/../src/info.json
-  path.resolve(__dirname, 'src', 'info.json'), // server/src/info.json (unlikely but safe)
+  path.resolve(__dirname, 'src', 'info.json'), // backend/server/src/info.json
+  path.resolve(__dirname, '..', 'src', 'info.json'), // backend/src/info.json
+  path.resolve(__dirname, '..', '..', 'frontend', 'src', 'info.json'), // ../frontend/src/info.json
+  path.resolve(__dirname, '..', '..', 'src', 'info.json'), // ../src/info.json
 ]
 
-let filePath = null
+let infoPath = null
 for (const p of candidates) {
   if (fs.existsSync(p)) {
-    filePath = p
+    infoPath = p
     break
   }
 }
 
-if (!filePath) {
+if (!infoPath) {
   console.error('Seed file not found. Tried the following locations:')
   for (const p of candidates) console.error(' -', p)
   process.exit(1)
@@ -32,23 +32,24 @@ if (!filePath) {
 
 async function seed() {
   try {
-    const raw = fs.readFileSync(filePath, 'utf8')
-    const data = JSON.parse(raw)
-    const docs = Array.isArray(data.Courses) ? data.Courses : []
+    const raw = fs.readFileSync(infoPath, 'utf8')
+    const parsed = JSON.parse(raw)
+    const docs = Array.isArray(parsed.Courses) ? parsed.Courses : []
     if (!docs.length) {
-      console.error('No courses found in info.json at', filePath)
+      console.error('No Courses array found in', infoPath)
       process.exit(1)
     }
 
     const db = await connectDB()
     const col = db.collection('courses')
+
     await col.deleteMany({})
     await col.insertMany(docs)
     const count = await col.countDocuments()
-    console.log('Seed complete, documents:', count)
+    console.log(`Seed complete. Inserted ${count} documents into 'courses'.`)
     process.exit(0)
   } catch (err) {
-    console.error('Seeding failed', err)
+    console.error('Seeding failed:', err)
     process.exit(1)
   }
 }

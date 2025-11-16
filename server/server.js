@@ -12,7 +12,7 @@ dotenv.config()
 
 const app = express()
 
-// Simple logger for requests (useful for debugging on Render)
+// simple request logger
 app.use((req, res, next) => {
   console.log(new Date().toISOString(), req.method, req.originalUrl)
   next()
@@ -21,53 +21,47 @@ app.use((req, res, next) => {
 app.use(cors())
 app.use(express.json())
 
-// Optional: serve lesson images placed in backend/public/images
+// serve images from backend/public/images (optional)
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const imagesDir = path.resolve(__dirname, '..', 'public', 'images')
-app.get('/images/:name', (req, res) => {
-  const name = req.params.name || ''
-  const filePath = path.join(imagesDir, name)
+app.get('/images/:filename', (req, res) => {
+  const filename = req.params.filename || ''
+  const filePath = path.join(imagesDir, filename)
   if (!filePath.startsWith(imagesDir) || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'Image not found' })
   }
   res.sendFile(filePath)
 })
 
-// Mount your API routers under /api
+// mount API routers
 app.use('/api', coursesRouter)
 app.use('/api', ordersRouter)
 
-// Health check route (Render uses this to verify the service)
-app.get('/health', (req, res) => {
-  res.json({ ok: true, env: process.env.NODE_ENV || 'development' })
-})
+// health check for Render / monitoring
+app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }))
 
-// Start server after connecting to DB
+// start server after DB connection
 const PORT = Number(process.env.PORT) || 3000
 async function start() {
   try {
-    await connectDB() // will throw if MONGODB_URI missing or connection fails
-    // Listen on 0.0.0.0 so external services (Render) can reach the process
+    await connectDB()
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`✅ Backend listening on port ${PORT}`)
+      console.log(`Backend listening on port ${PORT}`)
     })
   } catch (err) {
-    console.error('❌ Failed to start server:', err)
+    console.error('Failed to start server:', err)
     process.exit(1)
   }
 }
 
 start()
 
-// Graceful shutdown
+// graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('🛑 Shutting down server...')
+  console.log('Shutting down...')
   try {
     await getClient().close()
-  } catch (e) {
-    console.error('Error closing DB client:', e)
-  } finally {
-    process.exit(0)
-  }
+  } catch (e) {}
+  process.exit(0)
 })
